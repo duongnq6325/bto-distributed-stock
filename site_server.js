@@ -4,7 +4,7 @@ const chalk = require('chalk'); // Để in log màu
 
 const app = express();
 app.use(express.json());
-
+app.use(express.urlencoded({ extended: true }));
 // 1. Nhận Port từ lệnh chạy (Mặc định 3001)
 const PORT = process.argv[2] || 3001;
 const DB_PORT = (PORT == 3001) ? 3301 : 3302;
