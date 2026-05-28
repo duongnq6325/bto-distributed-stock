@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTO Stock Platform — Live Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ── RESET & VARS ──────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0D1117;--surface:#161B22;--border:#21262D;
+  --navy:#1B3A6B;--blue:#2563EB;--lblue:#1D3461;
+  --green:#238636;--lgreen:#1A3A2A;--greenT:#3FB950;
+  --red:#DA3633;--lred:#3A1A1A;--redT:#F85149;
+  --yellow:#D29922;--lyellow:#2D2A1A;--yellowT:#E3B341;
+  --text:#E6EDF3;--muted:#8B949E;--dim:#484F58;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Segoe UI',system-ui,sans-serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+
+/* ── HEADER ────────────────────────────────────────────────────── */
+header{
+  background:linear-gradient(135deg,#0D1117 0%,#1B3A6B 100%);
+  border-bottom:1px solid var(--border);
+  padding:1rem 1.5rem;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+}
+.header-left{display:flex;align-items:center;gap:1rem}
+.logo{font-size:1.3rem;font-weight:700;letter-spacing:-0.02em}
+.logo span{color:#60A5FA}
+.header-meta{font-size:0.7rem;color:var(--muted);font-family:var(--mono)}
+.live-badge{
+  display:flex;align-items:center;gap:0.4rem;
+  background:var(--lgreen);border:1px solid var(--green);
+  color:var(--greenT);font-size:0.7rem;font-weight:700;
+  padding:0.3rem 0.7rem;border-radius:20px;font-family:var(--mono);
+}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--greenT);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── LAYOUT ────────────────────────────────────────────────────── */
+.main{padding:1.2rem;display:flex;flex-direction:column;gap:1.2rem}
+
+/* ── KPI ROW ───────────────────────────────────────────────────── */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:0.8rem}
+.kpi{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:0.9rem 1rem;
+}
+.kpi-label{font-size:0.65rem;color:var(--muted);font-family:var(--mono);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.4rem}
+.kpi-value{font-size:1.6rem;font-weight:700;font-family:var(--mono);line-height:1}
+.kpi-sub{font-size:0.68rem;color:var(--muted);margin-top:0.3rem}
+.kpi.green .kpi-value{color:var(--greenT)}
+.kpi.red   .kpi-value{color:var(--redT)}
+.kpi.yellow.kpi-value{color:var(--yellowT)}
+.kpi.blue  .kpi-value{color:#60A5FA}
+
+/* ── SITES ROW ─────────────────────────────────────────────────── */
+.sites-row{display:grid;grid-template-columns:repeat(3,1fr);gap:0.8rem}
+.site-card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;overflow:hidden;
+  transition:border-color .3s;
+}
+.site-card.online {border-color:var(--green)}
+.site-card.offline{border-color:var(--red);opacity:.85}
+
+.site-header{
+  padding:0.7rem 1rem;
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--lblue);border-bottom:1px solid var(--border);
+}
+.site-card.offline .site-header{background:var(--lred)}
+
+.site-name{font-weight:700;font-size:0.9rem;font-family:var(--mono)}
+.site-frag{font-size:0.65rem;color:var(--muted);font-family:var(--mono);margin-top:0.1rem}
+.site-status{
+  font-size:0.65rem;font-weight:700;font-family:var(--mono);
+  padding:0.2rem 0.5rem;border-radius:4px;
+}
+.status-online {background:var(--lgreen);color:var(--greenT)}
+.status-offline{background:var(--lred);color:var(--redT)}
+
+.site-body{padding:0.8rem 1rem}
+.site-metrics{display:flex;gap:1.2rem;margin-bottom:0.8rem}
+.site-metric .label{font-size:0.62rem;color:var(--muted);font-family:var(--mono);text-transform:uppercase}
+.site-metric .val  {font-size:1rem;font-weight:700;font-family:var(--mono)}
+.val.green{color:var(--greenT)}
+.val.red  {color:var(--redT)}
+
+.stock-table{width:100%;border-collapse:collapse;font-size:0.72rem;font-family:var(--mono)}
+.stock-table th{color:var(--muted);text-align:left;padding:0.25rem 0.3rem;font-size:0.6rem;text-transform:uppercase;letter-spacing:.05em}
+.stock-table td{padding:0.25rem 0.3rem;border-top:1px solid var(--border)}
+.price-up  {color:var(--greenT)}
+.price-down{color:var(--redT)}
+.price-same{color:var(--text)}
+
+/* ── BOTTOM GRID ───────────────────────────────────────────────── */
+.bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.8rem}
+
+/* ── PANEL ──────────────────────────────────────────────────────── */
+.panel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;overflow:hidden;
+}
+.panel-header{
+  padding:0.6rem 1rem;
+  background:#161B22;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.panel-title{font-size:0.72rem;font-weight:700;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.panel-body{padding:0.8rem}
+
+/* ── TX FEED ─────────────────────────────────────────────────────── */
+.tx-feed{
+  height:280px;overflow-y:auto;
+  display:flex;flex-direction:column;gap:0.3rem;
+}
+.tx-feed::-webkit-scrollbar{width:4px}
+.tx-feed::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+.tx-item{
+  display:grid;grid-template-columns:auto auto 1fr auto auto;
+  align-items:center;gap:0.5rem;
+  padding:0.3rem 0.5rem;border-radius:4px;
+  font-family:var(--mono);font-size:0.68rem;
+  animation:slideIn .2s ease;
+}
+@keyframes slideIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+
+.tx-item.COMMIT   {background:#0D2016;border-left:2px solid var(--greenT)}
+.tx-item.BTO_ABORT{background:#2A0D0D;border-left:2px solid var(--redT)}
+.tx-item.NODE_DOWN{background:#2A1A0D;border-left:2px solid var(--yellowT)}
+.tx-item.ERROR    {background:#1A1A2A;border-left:2px solid var(--dim)}
+
+.tx-badge{
+  font-size:0.58rem;font-weight:700;padding:0.15rem 0.4rem;
+  border-radius:3px;white-space:nowrap;
+}
+.badge-COMMIT   {background:var(--lgreen);color:var(--greenT)}
+.badge-BTO_ABORT{background:var(--lred);color:var(--redT)}
+.badge-NODE_DOWN{background:var(--lyellow);color:var(--yellowT)}
+.badge-ERROR    {background:#1A1A2A;color:var(--dim)}
+
+.tx-symbol{font-weight:700;color:var(--text)}
+.tx-type  {color:var(--muted)}
+.tx-site  {color:#60A5FA}
+.tx-time  {color:var(--dim);font-size:0.6rem}
+
+/* ── CHART ───────────────────────────────────────────────────────── */
+.chart-wrap{height:280px;position:relative}
+
+/* ── CONTROLS ────────────────────────────────────────────────────── */
+.controls-panel{display:flex;flex-direction:column;gap:0.8rem;padding:0.8rem}
+.control-group label{
+  font-size:0.65rem;color:var(--muted);font-family:var(--mono);
+  text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:0.3rem
+}
+.control-row{display:flex;gap:0.5rem;flex-wrap:wrap}
+.ctrl-btn{
+  padding:0.4rem 0.8rem;border-radius:6px;border:1px solid var(--border);
+  font-family:var(--mono);font-size:0.72rem;cursor:pointer;
+  transition:all .15s;background:var(--surface);color:var(--text);
+}
+.ctrl-btn:hover{border-color:#60A5FA;color:#60A5FA}
+.ctrl-btn.danger{border-color:var(--red);color:var(--redT)}
+.ctrl-btn.danger:hover{background:var(--lred)}
+.ctrl-btn.success{border-color:var(--green);color:var(--greenT)}
+.ctrl-btn.success:hover{background:var(--lgreen)}
+.ctrl-btn.active{background:var(--lblue);border-color:var(--blue);color:#60A5FA}
+
+.tx-form{display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end}
+.tx-form select,.tx-form input{
+  background:#0D1117;border:1px solid var(--border);color:var(--text);
+  padding:0.35rem 0.6rem;border-radius:6px;font-family:var(--mono);font-size:0.72rem;
+}
+.tx-form select:focus,.tx-form input:focus{outline:none;border-color:#60A5FA}
+.send-btn{
+  background:var(--blue);color:#fff;border:none;
+  padding:0.35rem 1rem;border-radius:6px;font-family:var(--mono);
+  font-size:0.72rem;cursor:pointer;font-weight:700;
+  transition:background .15s;
+}
+.send-btn:hover{background:#1D4ED8}
+
+.result-box{
+  background:#0D1117;border:1px solid var(--border);
+  border-radius:6px;padding:0.5rem 0.7rem;
+  font-family:var(--mono);font-size:0.7rem;
+  color:var(--muted);min-height:2rem;
+  transition:border-color .3s;
+}
+.result-box.ok  {border-color:var(--green);color:var(--greenT)}
+.result-box.fail{border-color:var(--red);color:var(--redT)}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="header-left">
+    <div>
+      <div class="logo">BTO <span>Stock Platform</span></div>
+      <div class="header-meta">Project #24 · Category 3 · Özsu & Valduriez Algorithm 5.5</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:1rem">
+    <div style="font-family:var(--mono);font-size:0.7rem;color:var(--muted)" id="clock"></div>
+    <div class="live-badge"><span class="live-dot"></span>LIVE</div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- KPI ROW -->
+  <div class="kpi-row">
+    <div class="kpi blue">
+      <div class="kpi-label">Total Transactions</div>
+      <div class="kpi-value" id="kpi-total">0</div>
+      <div class="kpi-sub">since startup</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-label">Commits</div>
+      <div class="kpi-value" id="kpi-commits">0</div>
+      <div class="kpi-sub" id="kpi-commit-rate">0.0%</div>
+    </div>
+    <div class="kpi red">
+      <div class="kpi-label">BTO Aborts</div>
+      <div class="kpi-value" id="kpi-aborts">0</div>
+      <div class="kpi-sub" id="kpi-abort-rate">0.0%</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Sys Errors</div>
+      <div class="kpi-value" id="kpi-errors">0</div>
+      <div class="kpi-sub">conn / timeout</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Uptime</div>
+      <div class="kpi-value" id="kpi-uptime" style="font-size:1.1rem">00:00</div>
+      <div class="kpi-sub">hh:mm:ss</div>
+    </div>
+  </div>
+
+  <!-- SITES ROW -->
+  <div class="sites-row" id="sites-row">
+    <!-- filled by JS -->
+  </div>
+
+  <!-- BOTTOM GRID -->
+  <div class="bottom-grid">
+
+    <!-- TX FEED -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">⚡ Live Transaction Feed</span>
+        <span style="font-family:var(--mono);font-size:0.65rem;color:var(--dim)" id="feed-count">0 events</span>
+      </div>
+      <div class="panel-body" style="padding:0.5rem">
+        <div class="tx-feed" id="tx-feed"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div style="display:flex;flex-direction:column;gap:0.8rem">
+
+      <!-- CHART -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">📈 Abort Rate Over Time</span>
+          <span style="font-family:var(--mono);font-size:0.65rem;color:var(--dim)">last 30 samples</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap">
+            <canvas id="abortChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- MANUAL CONTROLS -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">🎮 Manual Controls</span>
+        </div>
+        <div class="controls-panel">
+
+          <!-- Send Transaction -->
+          <div>
+            <label>Send Transaction</label>
+            <div class="tx-form">
+              <select id="ctl-symbol">
+                <option>AAPL</option><option>BTC</option>
+                <option selected>FPT</option><option>MSFT</option>
+                <option>VNM</option>
+              </select>
+              <select id="ctl-type">
+                <option>WRITE</option><option>READ</option>
+              </select>
+              <input id="ctl-price" type="number" step="0.01" value="118.50" style="width:90px">
+              <button class="send-btn" onclick="sendManualTx()">SEND</button>
+            </div>
+            <div class="result-box" id="ctl-result" style="margin-top:0.4rem">Awaiting transaction...</div>
+          </div>
+
+          <!-- Kill / Restart nodes -->
+          <div>
+            <label>Kill / Restart Node (demo)</label>
+            <div class="control-row" id="node-controls">
+              <button id="kill-btn-1" class="ctrl-btn danger" onclick="killNode(1)">⚡ Kill Site 1</button>
+              <button id="kill-btn-2" class="ctrl-btn danger" onclick="killNode(2)">⚡ Kill Site 2</button>
+              <button id="kill-btn-3" class="ctrl-btn danger" onclick="killNode(3)">⚡ Kill Site 3</button>
+            </div>
+            <div style="margin-top:0.4rem;font-family:var(--mono);font-size:0.65rem;color:var(--dim)">
+              ↳ Result: <span id="kill-cmd" style="color:var(--yellowT)">Click Kill/Start để thực hiện</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── CHART SETUP ──────────────────────────────────────────────────────────────
+const chartLabels = [];
+const chartData   = [];
+const ctx = document.getElementById('abortChart').getContext('2d');
+const abortChart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: chartLabels,
+    datasets: [{
+      label: 'BTO Abort Rate %',
+      data: chartData,
+      borderColor: '#F85149',
+      backgroundColor: 'rgba(248,81,73,0.1)',
+      borderWidth: 2,
+      pointRadius: 3,
+      pointBackgroundColor: '#F85149',
+      tension: 0.3,
+      fill: true,
+    },{
+      label: 'Commit Rate %',
+      data: [],
+      borderColor: '#3FB950',
+      backgroundColor: 'rgba(63,185,80,0.07)',
+      borderWidth: 2,
+      pointRadius: 3,
+      pointBackgroundColor: '#3FB950',
+      tension: 0.3,
+      fill: true,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 300 },
+    plugins: {
+      legend: { labels: { color: '#8B949E', font: { family: 'JetBrains Mono', size: 11 } } },
+      tooltip: { backgroundColor: '#161B22', titleColor: '#E6EDF3', bodyColor: '#8B949E' }
+    },
+    scales: {
+      x: { ticks: { color: '#484F58', font: { family: 'JetBrains Mono', size: 9 }, maxTicksLimit: 8 }, grid: { color: '#21262D' } },
+      y: { min: 0, max: 100, ticks: { color: '#484F58', font: { family: 'JetBrains Mono', size: 10 }, callback: v => v+'%' }, grid: { color: '#21262D' } }
+    }
+  }
+});
+
+let lastTotal = 0;
+let feedCount = 0;
+const prevPrices = {};
+
+// ── CLOCK ─────────────────────────────────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('vi-VN');
+}, 1000);
+
+// ── UPTIME FORMATTER ──────────────────────────────────────────────────────────
+function fmtUptime(s) {
+  const h = String(Math.floor(s/3600)).padStart(2,'0');
+  const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+  const ss= String(s%60).padStart(2,'0');
+  return `${h}:${m}:${ss}`;
+}
+
+// ── POLL COORDINATOR STATS ────────────────────────────────────────────────────
+async function pollStats() {
+  try {
+    const r = await fetch('/api/stats');
+    const d = await r.json();
+
+    document.getElementById('kpi-total').textContent   = d.totalTx.toLocaleString();
+    document.getElementById('kpi-commits').textContent = d.commits.toLocaleString();
+    document.getElementById('kpi-aborts').textContent  = d.aborts.toLocaleString();
+    document.getElementById('kpi-errors').textContent  = d.errors.toLocaleString();
+    document.getElementById('kpi-uptime').textContent  = fmtUptime(d.uptime);
+
+    const commitRate = d.totalTx > 0 ? ((d.commits/d.totalTx)*100).toFixed(1) : '0.0';
+    const abortRate  = d.totalTx > 0 ? ((d.aborts /d.totalTx)*100).toFixed(1) : '0.0';
+    document.getElementById('kpi-commit-rate').textContent = commitRate + '%';
+    document.getElementById('kpi-abort-rate').textContent  = abortRate  + '%';
+
+    // Update chart every 2s
+    if (d.totalTx !== lastTotal) {
+      lastTotal = d.totalTx;
+      const t = new Date().toLocaleTimeString('vi-VN', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+      chartLabels.push(t);
+      abortChart.data.datasets[0].data.push(parseFloat(abortRate));
+      abortChart.data.datasets[1].data.push(parseFloat(commitRate));
+      if (chartLabels.length > 30) {
+        chartLabels.shift();
+        abortChart.data.datasets[0].data.shift();
+        abortChart.data.datasets[1].data.shift();
+      }
+      abortChart.update();
+    }
+  } catch {}
+}
+
+// ── POLL SITE STATUS ──────────────────────────────────────────────────────────
+async function pollSites() {
+  try {
+    const r = await fetch('/api/sites');
+    const sites = await r.json();
+    renderSites(sites);
+    // Sync kill/start button state với trạng thái thực tế
+    sites.forEach(s => {
+      const num = s.key?.replace('SITE','');
+      if (!num) return;
+      const wasOnline = siteState[num];
+      siteState[num] = s.online;
+      if (wasOnline !== s.online) updateKillBtn(parseInt(num));
+    });
+  } catch {}
+}
+
+function renderSites(sites) {
+  const container = document.getElementById('sites-row');
+  container.innerHTML = sites.map(s => {
+    const cls     = s.online ? 'online' : 'offline';
+    const statusCls = s.online ? 'status-online' : 'status-offline';
+    const statusTxt = s.online ? '● ONLINE' : '● OFFLINE';
+    const stockRows = (s.stocks || []).map(st => {
+      const prev = prevPrices[st.Symbol];
+      const cur  = parseFloat(st.CurrentPrice);
+      let priceCls = 'price-same';
+      if (prev !== undefined) {
+        if (cur > prev) priceCls = 'price-up';
+        else if (cur < prev) priceCls = 'price-down';
+      }
+      prevPrices[st.Symbol] = cur;
+      return `<tr>
+        <td style="font-weight:700">${st.Symbol}</td>
+        <td class="${priceCls}">${Number(st.CurrentPrice).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
+        <td style="color:var(--dim)">${st.W_TS > 0 ? '✓' : '–'}</td>
+      </tr>`;
+    }).join('');
+
+    const port = s.port || (s.key === 'SITE1' ? 3001 : s.key === 'SITE2' ? 3002 : 3003);
+
+    return `<div class="site-card ${cls}">
+      <div class="site-header">
+        <div>
+          <div class="site-name">${s.site || s.key}</div>
+          <div class="site-frag">Fragment ${s.fragment} · :${port}</div>
+        </div>
+        <span class="site-status ${statusCls}">${statusTxt}</span>
+      </div>
+      <div class="site-body">
+        <div class="site-metrics">
+          <div class="site-metric">
+            <div class="label">Commits</div>
+            <div class="val green">${(s.commits||0).toLocaleString()}</div>
+          </div>
+          <div class="site-metric">
+            <div class="label">Aborts</div>
+            <div class="val red">${(s.aborts||0).toLocaleString()}</div>
+          </div>
+          <div class="site-metric">
+            <div class="label">Uptime</div>
+            <div class="val">${s.online ? fmtUptime(s.uptime||0) : 'N/A'}</div>
+          </div>
+        </div>
+        ${s.online && stockRows ? `<table class="stock-table">
+          <thead><tr><th>Symbol</th><th>Price</th><th>Updated</th></tr></thead>
+          <tbody>${stockRows}</tbody>
+        </table>` : `<div style="font-family:var(--mono);font-size:0.72rem;color:var(--redT);padding:0.5rem 0">⚠ Node unreachable</div>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── SERVER-SENT EVENTS ────────────────────────────────────────────────────────
+const evtSource = new EventSource('/events');
+evtSource.onmessage = e => {
+  const tx = JSON.parse(e.data);
+  addToFeed(tx);
+};
+
+function addToFeed(tx) {
+  feedCount++;
+  document.getElementById('feed-count').textContent = feedCount + ' events';
+
+  const feed = document.getElementById('tx-feed');
+  const time = new Date(tx.time).toLocaleTimeString('vi-VN');
+  const price = tx.newPrice ? ` → $${Number(tx.newPrice).toFixed(2)}` : '';
+  const reason = tx.reason ? ` (${tx.reason})` : '';
+
+  const item = document.createElement('div');
+  item.className = `tx-item ${tx.result}`;
+  item.innerHTML = `
+    <span class="tx-badge badge-${tx.result}">${tx.result}</span>
+    <span class="tx-symbol">${tx.symbol}</span>
+    <span class="tx-type">${tx.type}${price}${reason}</span>
+    <span class="tx-site">:${tx.site}</span>
+    <span class="tx-time">${time}</span>
+  `;
+  feed.insertBefore(item, feed.firstChild);
+  // Keep max 80 items
+  while (feed.children.length > 80) feed.removeChild(feed.lastChild);
+}
+
+// ── MANUAL TRANSACTION ────────────────────────────────────────────────────────
+async function sendManualTx() {
+  const symbol   = document.getElementById('ctl-symbol').value;
+  const type     = document.getElementById('ctl-type').value;
+  const newPrice = document.getElementById('ctl-price').value;
+  const box      = document.getElementById('ctl-result');
+
+  box.className = 'result-box';
+  box.textContent = '⏳ Sending...';
+
+  try {
+    const r = await fetch('/api/transaction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol, type, newPrice: parseFloat(newPrice) }),
+    });
+    const d = await r.json();
+
+    if (r.status === 200) {
+      box.className = 'result-box ok';
+      box.textContent = `✓ COMMIT — ${symbol} ${type}${type==='WRITE'?` @ $${newPrice}`:''}`;
+    } else if (r.status === 409) {
+      box.className = 'result-box fail';
+      box.textContent = `✗ BTO ABORT — ${d.reason || 'Timestamp violation'}`;
+    } else {
+      box.className = 'result-box fail';
+      box.textContent = `⚠ ERROR — ${d.message || 'Unknown error'}`;
+    }
+  } catch (err) {
+    box.className = 'result-box fail';
+    box.textContent = `⚠ Connection failed — Is coordinator running?`;
+  }
+}
+
+// ── KILL / RESTART NODE — gọi API thực sự ────────────────────────────────────
+const siteState = { 1: true, 2: true, 3: true }; // true = online
+
+async function killNode(n) {
+  const btn = document.getElementById(`kill-btn-${n}`);
+  const isOnline = siteState[n];
+  const action   = isOnline ? 'kill' : 'restart';
+
+  btn.disabled = true;
+  btn.textContent = '⏳ ...';
+
+  try {
+    const r = await fetch(`/api/site/${action}/${n}`, { method: 'POST' });
+    const d = await r.json();
+
+    if (d.ok) {
+      siteState[n] = !isOnline;
+      updateKillBtn(n);
+      document.getElementById('kill-cmd').textContent =
+        `docker ${action} bto_site${n} → ${d.output || 'OK'}`;
+    } else {
+      document.getElementById('kill-cmd').textContent =
+        `Error: ${d.error}`;
+    }
+  } catch (e) {
+    document.getElementById('kill-cmd').textContent = `Error: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function updateKillBtn(n) {
+  const btn = document.getElementById(`kill-btn-${n}`);
+  if (!btn) return;
+  if (siteState[n]) {
+    btn.textContent  = `⚡ Kill Site ${n}`;
+    btn.className    = 'ctrl-btn danger';
+  } else {
+    btn.textContent  = `▶ Start Site ${n}`;
+    btn.className    = 'ctrl-btn success';
+  }
+}
+
+// ── POLLING LOOP ──────────────────────────────────────────────────────────────
+pollStats();
+pollSites();
+setInterval(pollStats, 1500);
+setInterval(pollSites, 2500);
+</script>
+
+<!-- ── BENCHMARK RESULTS TABLE (dynamic) ─────────────────────────────── -->
+<div class="main" style="padding-top:0">
+<div class="panel" style="overflow:hidden">
+  <div class="panel-header">
+    <span class="panel-title">📊 Benchmark Results — Abort Rate vs Update Frequency</span>
+    <span style="font-family:var(--mono);font-size:0.65rem;color:var(--dim)" id="bench-updated">Chưa có dữ liệu</span>
+  </div>
+  <div style="padding:1.2rem;display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+    <!-- TABLE -->
+    <div>
+      <table style="width:100%;border-collapse:collapse;font-size:0.78rem;font-family:var(--mono)">
+        <thead>
+          <tr style="background:#13161e">
+            <th style="padding:0.6rem 0.8rem;text-align:left;color:var(--muted);font-size:0.65rem;letter-spacing:.08em;border-bottom:1px solid var(--border)">TPS</th>
+            <th style="padding:0.6rem 0.8rem;text-align:right;color:var(--muted);font-size:0.65rem;letter-spacing:.08em;border-bottom:1px solid var(--border)">Total</th>
+            <th style="padding:0.6rem 0.8rem;text-align:right;color:#3FB950;font-size:0.65rem;letter-spacing:.08em;border-bottom:1px solid var(--border)">Commit</th>
+            <th style="padding:0.6rem 0.8rem;text-align:right;color:#F85149;font-size:0.65rem;letter-spacing:.08em;border-bottom:1px solid var(--border)">BTO Abort</th>
+            <th style="padding:0.6rem 0.8rem;text-align:right;color:#3FB950;font-size:0.65rem;letter-spacing:.08em;border-bottom:1px solid var(--border)">Success%</th>
+            <th style="padding:0.6rem 0.8rem;text-align:right;color:#F85149;font-size:0.65rem;letter-spacing:.08em;border-bottom:1px solid var(--border)">Abort%</th>
+          </tr>
+        </thead>
+        <tbody id="bench-tbody"><tr><td colspan="6" style="padding:1rem;text-align:center;color:var(--dim);font-family:var(--mono);font-size:0.75rem">Chạy node simulator.js để xem kết quả...</td></tr></tbody>
+      </table>
+      <div style="margin-top:1rem;background:#0a0f1a;border:1px solid #1a2a3a;border-left:3px solid #2563EB;border-radius:6px;padding:0.8rem 1rem">
+        <div style="font-size:0.65rem;color:#60A5FA;font-family:var(--mono);font-weight:700;letter-spacing:.08em;margin-bottom:0.4rem">KEY OBSERVATION — Özsu & Valduriez §5.2.2</div>
+        <div style="font-size:0.72rem;color:#8B949E;line-height:1.6;font-style:italic">"The basic TO algorithm never causes deadlocks — the penalty of deadlock freedom is potential restart of a transaction numerous times."</div>
+        <div style="font-size:0.7rem;color:#E6EDF3;margin-top:0.5rem;line-height:1.5">BTO Abort Rate tăng đơn điệu theo TPS: W_TS được cập nhật liên tục → transaction đến sau có ts &lt; W_TS bị reject.</div>
+      </div>
+    </div>
+    <!-- BAR CHART -->
+    <div><canvas id="benchChart" height="220"></canvas></div>
+  </div>
+</div>
+</div>
+
+<script>
+let benchChart = null;
+
+function renderBenchmark(rows) {
+  // Update table
+  const tbody = document.getElementById('bench-tbody');
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:1rem;text-align:center;color:var(--dim);font-family:var(--mono);font-size:0.75rem">Chạy node simulator.js để xem kết quả...</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r, i) => {
+    const abortColor = r.abortPct >= 60 ? '#F85149' : r.abortPct >= 30 ? '#E3B341' : '#3FB950';
+    const bg = i % 2 === 0 ? '' : 'background:#0d1117';
+    return `<tr style="${bg}">
+      <td style="padding:0.5rem 0.8rem;font-weight:700;color:#60A5FA">${r.tps}</td>
+      <td style="padding:0.5rem 0.8rem;text-align:right;color:var(--muted)">${r.total.toLocaleString()}</td>
+      <td style="padding:0.5rem 0.8rem;text-align:right;color:#3FB950">${r.commit.toLocaleString()}</td>
+      <td style="padding:0.5rem 0.8rem;text-align:right;color:#F85149">${r.abort.toLocaleString()}</td>
+      <td style="padding:0.5rem 0.8rem;text-align:right;color:#3FB950">${r.successPct.toFixed(1)}%</td>
+      <td style="padding:0.5rem 0.8rem;text-align:right;font-weight:700;color:${abortColor}">${r.abortPct.toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+
+  // Update chart
+  const labels  = rows.map(r => r.tps + ' TPS');
+  const commits = rows.map(r => r.successPct);
+  const aborts  = rows.map(r => r.abortPct);
+
+  if (benchChart) {
+    benchChart.data.labels = labels;
+    benchChart.data.datasets[0].data = commits;
+    benchChart.data.datasets[1].data = aborts;
+    benchChart.update();
+  } else {
+    const ctx2 = document.getElementById('benchChart').getContext('2d');
+    benchChart = new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Commit %',    data: commits, backgroundColor: 'rgba(63,185,80,0.75)',  borderRadius: 4 },
+          { label: 'BTO Abort %', data: aborts,  backgroundColor: 'rgba(248,81,73,0.75)', borderRadius: 4 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color:'#8B949E', font:{family:'JetBrains Mono',size:11} } },
+          tooltip: { backgroundColor:'#161B22', titleColor:'#E6EDF3', bodyColor:'#8B949E' },
+          title: { display:true, text:'Commit vs BTO Abort Rate by TPS',
+            color:'#8B949E', font:{family:'JetBrains Mono',size:11}, padding:{bottom:12} }
+        },
+        scales: {
+          x: { stacked:true, ticks:{color:'#484F58',font:{family:'JetBrains Mono',size:10}}, grid:{color:'#21262D'} },
+          y: { stacked:true, max:100, ticks:{color:'#484F58',font:{family:'JetBrains Mono',size:10},callback:v=>v+'%'}, grid:{color:'#21262D'} }
+        }
+      }
+    });
+  }
+}
+
+async function pollBenchmark() {
+  try {
+    const r = await fetch('/api/benchmark');
+    const d = await r.json();
+    if (d.rows && d.rows.length > 0) {
+      renderBenchmark(d.rows);
+      const t = new Date(d.updatedAt).toLocaleTimeString('vi-VN');
+      document.getElementById('bench-updated').textContent = 'Cập nhật lúc ' + t;
+    }
+  } catch {}
+}
+
+// Poll mỗi 5s — tự cập nhật ngay khi simulator chạy xong
+pollBenchmark();
+setInterval(pollBenchmark, 5000);
+</script>
+</body>
+</html>

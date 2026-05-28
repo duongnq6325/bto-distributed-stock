@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   site1_db:
     image: mysql:8.0
@@ -9,6 +10,11 @@ services:
     ports:
       - "3301:3306"
     command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   site2_db:
     image: mysql:8.0
@@ -19,3 +25,23 @@ services:
     ports:
       - "3302:3306"
     command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  site3_db:
+    image: mysql:8.0
+    container_name: bto_site3
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: stock_db
+    ports:
+      - "3303:3306"
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
